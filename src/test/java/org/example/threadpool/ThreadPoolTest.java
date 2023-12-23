@@ -37,7 +37,7 @@ class ThreadPoolTest {
                 });
             }
             //latch가 0이 될때까지 기다린다.
-            countDownLatch.await();
+            //countDownLatch.await();
         }finally {
            executor.shutdown();
         }

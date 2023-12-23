@@ -144,9 +144,40 @@ public class ThreadPool implements Executor {
          * @solutionList
          * 1. 가장 단순한 방법 -> (2)false임을 확인하고, (6)queue에 task에 추가하는 부분을 lock을 잡아 처리하기
          * B도 (3), (4), (5)를 같은 Lock을 잡아서 가져가면 된다. => 그렇게 하면 execute를 할때마다 lock이 잡힘
-         *
+         * 2. 2가지 상태 만들기
+         * - shuttingDown, shutdown 만들기
+         * 1. Thread A : execute(task)
+         * 2. Thread A : shuttingDown == false
+         * 3. Thread B : shutdown()
+         * 4. Thread B : shuttingDown.compareAndSet(false, true)
+         * 5. Thread A : if(!shutdown) queue.add(task);
+         * 6. Thread B : shutdown = true
+         * 7. Thread B : queue.add(SHUTDOWN_TASK)
+         * => 이렇게 되버리면 뚫린다.
+         * 3. {@link java.util.concurrent.ThreadPoolExecutor#execute(Runnable)} 참고하기
+         * 1. Thread A : execute(task)를 호출한다.
+         * 2. Thread A : shutdown == false임을 확인한다.
+         * 3. Thread B : shutdown() 을 호출한다.
+         * 4. Thread B : shutdown.compareAndSet(false, true)를 실행한다.
+         * 5. Thread B : queue에 SHUTDOWN_TASK를 모두 집어 넣는다.
+         * 6. Thread A : queue에 task를 추가한다. (!) --> task는 실행이 되지 않는다.
+         * 7. Thread A : shutdown == true이면 queue에서 task를 빼고, RejectedExecutionException을 던진다.
+         *  => 이렇게 해야 잡힌다.
+         * {@link java.util.concurrent.ThreadPoolExecutor#ctl}의 상태 관리
+         * 32 bit에서 3빼서 29bit를 Count로 가지고 Integer는 2 ^ 32개의 경우의 수를 가지는게 맞지.
+         * 근데 지금 모든 상수에 29만큼 Shifting하고 있잖아
+         * 그럼 어떤 값을 넣든 2 ^ 3을 넘어서는 값은 2 ^ 29만큼의 shifting을 통해서 절사되고
+         * 2 ^ 3이하의 값만 가질 수 밖에 없게 된다.
          * */
         queue.add(command);
+        if(shutdown.get()){
+            queue.remove(command);
+            /**
+             * 만약 command에 equals를 overriding한 Runnable클래스를 받았다면?
+             * 내가 넣은 Task가 아니라, 다른 Task가 삭제될 수 도 있다. => JDK에서도 잡아주진 않는다.
+             */
+            throw new RejectedExecutionException();
+        }
         /**
          * 여기서 문제가 발생할 수 있다.
          * {@link ThreadPoolTest} 에서 Thread.sleep()함수 호출을 위해 Interrupted Exception을
@@ -201,7 +232,7 @@ public class ThreadPool implements Executor {
             //alive인 동안만 interrupt를 시도하며 돌면서 스레드가 멈추기를 기다리면, 불필요하게 CPU를 소모하게 된다.
             //따라서 종료될때 알려주는 장치가 필요
             do {
-                for (; ; ) {
+                //for (; ; ) {
                     try {
                         thread.join();
                         //여기서 메소드 예외로 전파하지 않는 이유는 thread가 반 쯤 종료된 상태에서 예외를 전파시켜버리면
@@ -213,7 +244,7 @@ public class ThreadPool implements Executor {
                         break;
                     }
                     thread.interrupt();*/
-                }
+                //}
             } while (thread.isAlive());
         }
         //doThrowUnsafely(new InterruptedException());
