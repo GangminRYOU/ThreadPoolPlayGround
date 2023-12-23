@@ -50,7 +50,7 @@ public class ThreadPool implements Executor {
     /** (12/16 - 원시 ThreadPool을 개선하기)
      * 1. ThreadPool을 정지하는 기능이 없다.
      * 2. ThreadPool의 Thread를 필요한 만큼 만들지 않고 무조건 최대한으로 만든다.
-     * @param numOfThreads
+     * @param maxNumOfThreads
      * Thread Pool같은 경우에 동시성 이슈가 항상 발생할 수 있기 때문에, 주의해야 한다.
      */
     public ThreadPool(int maxNumOfThreads){
