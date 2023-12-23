@@ -1,5 +1,7 @@
 package org.example.threadpool;
 
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.LinkedTransferQueue;
@@ -22,7 +24,13 @@ public class ThreadPool implements Executor {
     private static final Runnable SHUTDOWN_TASK = () -> {};
     private final BlockingQueue<Runnable> queue = new LinkedTransferQueue<>();
 
-    private Thread[] threads;
+    /**
+     * Thread를 Dynamic하게 생성, 실행하기 위한 Set도입
+     *
+     */
+    private final Set<Thread> threads;
+    private final int maxNumThreads;
+    //private Thread[] threads;
     private AtomicBoolean started = new AtomicBoolean();
     /**
      * 정상 종료를 위한 flag
@@ -45,84 +53,98 @@ public class ThreadPool implements Executor {
      * @param numOfThreads
      * Thread Pool같은 경우에 동시성 이슈가 항상 발생할 수 있기 때문에, 주의해야 한다.
      */
-    public ThreadPool(int numOfThreads){
-        threads = new Thread[numOfThreads];
-        for (int i = 0; i < numOfThreads; i++) {
-            threads[i] = new Thread(() -> {
-                //...
-                //Take의 경우 Blocking 형태로 무한정 기다리게 된다.
-                //Queue에 작업이 들어오면, Thread가 대기하다가 실행하는 구조
-                //try {
-                    //Task를 지속적으로 받아서 수행해야하니까 무한 루프를 돌아야 한다.
-                    //shutdown이 아닐때만 job을 take할수 있게 수정한다.
-                /**
-                 * shutdown일 때만 shutdown을 하는게 아니라, Queue에 Job이 없을떄만 Shutdown을 한다.
-                 * shutdown이고, queue에 Job이 없을때만 반복한다.
-                 * @implNote 하지만 문제가 있다. -> Thread 1과 Thread 2가 job이 queue에 하나 있을때,
-                 * 둘다 queue가 비지 않았다고 여긴다. -> queue.take()
-                 * 첫번째 Thread는 Job을 끝내겠지만, Job을 받지 못한 두번째 Thread는 interrupt를
-                 * 해주지 않으면 계속 기다리게 된다.
-                 * -> 두가지 방법이 있다.
-                 * 1. 반복적으로 interrupt를 해서 Thread를 깨우기
-                 * 2. 정해진 시간 정도만 queue.take()로 기다리기
-                 */
-                // 사용자가 무작위 하게 Queue에 넣는 job에서 InterruptedException을 발생시켜서
-                // Thread를 종료시키는 경우를 방어하기 위해 while문 안에서 try catch를 잡는다.
-                //while(!shutdown || !queue.isEmpty())
-                /**
-                 * {@link #SHUTDOWN_TASK}와 같은 terminator를 사용하면
-                 * 1. Queue가 비어있는 상태를 보장하고, ThreadPool을 종료할 수 있기 때문에
-                 * (SHUTDOWN_TASK를 받으면 자동 종료가 되니까) Queue의 상태를 확인하지 않아도 된다.
-                 * 2. shutdown인지 확인 할 필요가 없어진다.
-                 * -> SHUTDOWN_TASK를 수행하면 뒤에 Job을 받기 전에 Thread가 종료되어 버리기 때문에
-                 * => 이제 shutdown은 {@link #shutdown()} 이 되었는데 Queue에 Job을 넣는것을 방어하기 위함으로만 사용된다.
-                 */
-                for(;;) {
-                    try{
-                        final Runnable task = queue.take();
-                        //Shutdown task로 시그널을 보내면 Interrupt Signal을 보낼 이유도 없어진다.
-                        if(task == SHUTDOWN_TASK){
-                            break;
-                            /**
-                             * SHUTDOWN_TASK는 Thread가 한번만 받아도 return을 하기 때문에
-                             * 하나의 Thread가 여러번 받을 이유는 없다.
-                             * Thread갯수 만큼만 queue에 넣어주게 되면, 모든 Thread가 Shutdown에 들어가게 된다.
-                             */
-                        }else {
-                            task.run();
-                        }
-                    //Throwable이냐 Exception이냐? throw new Error로 사용자가 던져버리면 Exception으로는 잡지 못한다.
-                    }catch (Throwable throwable){
-                        /**Java 언어 spec상 던질수 없다고 하지만, 실제로는 Interrupted Exception을 던질 수 있다.
-                         * Exception의 타입을 E 와 같은 타입 파라미터로 던지게 되면 타입에 상관없이 모두 던질 수 있다.
-                         * {@link ThreadPool#doThrowUnsafely(Throwable)}
-                         * */
-                        if(!(throwable instanceof InterruptedException)){
-                            System.err.println("Unexpected Exception: ");
-                            throwable.printStackTrace();
-                        }
-                    }
-                }
-                System.err.println("Shutting thread  '" + Thread.currentThread().getName() + '\'');
-            });
-
+    public ThreadPool(int maxNumOfThreads){
+        this.maxNumThreads = maxNumOfThreads;
+        threads = new HashSet<>(maxNumOfThreads);
+        //threads = new Thread[maxNumOfThreads];
             /**
              * Thread를 Constructor안에서 Thread를 시작하는 경우, JVM 스펙에 따라서 문제가 발생할 수 있다.
              * Thread가 Queue를 참조하고 있는데, Queue가 어떤 시점에 초기화 되는지가 애매하다.
              * 따라서 Lazy하게 해서, 첫번쨰 실행이 왔을때, 시작을 하는 방식으로 해보자
              */
             //threads[i].start();
-        }
+    }
+
+    private Thread newThread() {
+        return new Thread(() -> {
+            //...
+            //Take의 경우 Blocking 형태로 무한정 기다리게 된다.
+            //Queue에 작업이 들어오면, Thread가 대기하다가 실행하는 구조
+            //try {
+            //Task를 지속적으로 받아서 수행해야하니까 무한 루프를 돌아야 한다.
+            //shutdown이 아닐때만 job을 take할수 있게 수정한다.
+            /**
+             * shutdown일 때만 shutdown을 하는게 아니라, Queue에 Job이 없을떄만 Shutdown을 한다.
+             * shutdown이고, queue에 Job이 없을때만 반복한다.
+             * @implNote 하지만 문제가 있다. -> Thread 1과 Thread 2가 job이 queue에 하나 있을때,
+             * 둘다 queue가 비지 않았다고 여긴다. -> queue.take()
+             * 첫번째 Thread는 Job을 끝내겠지만, Job을 받지 못한 두번째 Thread는 interrupt를
+             * 해주지 않으면 계속 기다리게 된다.
+             * -> 두가지 방법이 있다.
+             * 1. 반복적으로 interrupt를 해서 Thread를 깨우기
+             * 2. 정해진 시간 정도만 queue.take()로 기다리기
+             */
+            // 사용자가 무작위 하게 Queue에 넣는 job에서 InterruptedException을 발생시켜서
+            // Thread를 종료시키는 경우를 방어하기 위해 while문 안에서 try catch를 잡는다.
+            //while(!shutdown || !queue.isEmpty())
+            /**
+             * {@link #SHUTDOWN_TASK}와 같은 terminator를 사용하면
+             * 1. Queue가 비어있는 상태를 보장하고, ThreadPool을 종료할 수 있기 때문에
+             * (SHUTDOWN_TASK를 받으면 자동 종료가 되니까) Queue의 상태를 확인하지 않아도 된다.
+             * 2. shutdown인지 확인 할 필요가 없어진다.
+             * -> SHUTDOWN_TASK를 수행하면 뒤에 Job을 받기 전에 Thread가 종료되어 버리기 때문에
+             * => 이제 shutdown은 {@link #shutdown()} 이 되었는데 Queue에 Job을 넣는것을 방어하기 위함으로만 사용된다.
+             */
+            for (; ; ) {
+                try {
+                    final Runnable task = queue.take();
+                    //Shutdown task로 시그널을 보내면 Interrupt Signal을 보낼 이유도 없어진다.
+                    if (task == SHUTDOWN_TASK) {
+                        break;
+                        /**
+                         * SHUTDOWN_TASK는 Thread가 한번만 받아도 return을 하기 때문에
+                         * 하나의 Thread가 여러번 받을 이유는 없다.
+                         * Thread갯수 만큼만 queue에 넣어주게 되면, 모든 Thread가 Shutdown에 들어가게 된다.
+                         */
+                    } else {
+                        task.run();
+                    }
+                    //Throwable이냐 Exception이냐? throw new Error로 사용자가 던져버리면 Exception으로는 잡지 못한다.
+                } catch (Throwable throwable) {
+                    /**Java 언어 spec상 던질수 없다고 하지만, 실제로는 Interrupted Exception을 던질 수 있다.
+                     * Exception의 타입을 E 와 같은 타입 파라미터로 던지게 되면 타입에 상관없이 모두 던질 수 있다.
+                     * {@link ThreadPool#doThrowUnsafely(Throwable)}
+                     * */
+                    if (!(throwable instanceof InterruptedException)) {
+                        System.err.println("Unexpected Exception: ");
+                        throwable.printStackTrace();
+                    }
+                }
+            }
+            System.err.println("Shutting thread  '" + Thread.currentThread().getName() + '\'');
+        });
     }
 
     @Override
     public void execute(Runnable command) {
         /**
+         * 1. 모든 Thread가 일을 하고 있다면 Thread를 하나 추가해야한다.
+         * -> 그래야 Worker Thread가 task를 pickup해서 최대 Thread 갯수 만큼 활용
+         * 2. 놀고 있는 Thread가 있다면, 단순히 task를 추가해주면 된다.
+         * => 놀고 있는 Thread의 수와 놀고 있지 않은 Thread의 수를 알아야 한다.
+         * 지금 가지고 있는 Thread만으로도 작업을 밀리지 않고 처리할 수 있느냐 아니냐가 결론적인 문제
+         */
+
+        /**
          * 만약 동시에 execute를 호출한다면, 같은 thread에서 두번 호출될 수 있다.
          * CAS로 Atomic연산해서 동시성을 제어하자
          */
         if(started.compareAndSet(false, true)){
-            //started = true;
+            //started = true;/
+            /**
+             * @problem (12/23) thread를 필요한 갯수만큼 생성하고 실행하지 않고, 최댓값으로 생성 및 실행한다.
+             * => 필요할때마다 Thread를 새로 만들고 추가하는 기능이 필요하다.
+             */
             for (Thread thread : threads) {
                 thread.start();
             }
@@ -178,6 +200,11 @@ public class ThreadPool implements Executor {
              */
             throw new RejectedExecutionException();
         }
+        /* TODO: activeThreadCount가 현재 배정된 Thread갯수보다 많거나 같으면 작업이 밀리지 않게 Thread 추가
+        if(activeThreadCount >= currentThreadCount){
+            addMoreThread();
+        }*/
+        queue.add(command);
         /**
          * 여기서 문제가 발생할 수 있다.
          * {@link ThreadPoolTest} 에서 Thread.sleep()함수 호출을 위해 Interrupted Exception을

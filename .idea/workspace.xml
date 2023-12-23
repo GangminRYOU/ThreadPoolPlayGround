@@ -4,9 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="57d0f2b9-3680-4e0b-9c9f-c0384a329714" name="Changes" comment="feat(12/23) : ThreadPool 개선 &#10;- Interrupt 대신 SHUTDOWN_TASK를 통해 ThreadPool 종료 signaling&#10;- shutdown 여러 번 호출 방지를 위한 AtomicBoolean 적용&#10;- SHUTDOWN_TASK 적용 이후, 불필요한 queue.isEmpty()와 shutdown 여부 확인 리팩토링">
-      <change afterPath="$PROJECT_DIR$/src/main/java/org/example/threadpool/ExtendedMyRunnable.java" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/src/main/java/org/example/threadpool/MyRunnable.java" afterDir="false" />
+    <list default="true" id="57d0f2b9-3680-4e0b-9c9f-c0384a329714" name="Changes" comment="feat(12/23) : ThreadPool 정지 기능 개발 완료">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/src/main/java/org/example/threadpool/ThreadPool.java" beforeDir="false" afterPath="$PROJECT_DIR$/src/main/java/org/example/threadpool/ThreadPool.java" afterDir="false" />
     </list>
@@ -156,7 +154,7 @@
       <updated>1702195255934</updated>
       <workItem from="1702195257123" duration="2000" />
       <workItem from="1702651238488" duration="8540000" />
-      <workItem from="1703250397139" duration="12357000" />
+      <workItem from="1703250397139" duration="14307000" />
     </task>
     <task id="LOCAL-00001" summary="feature: 가장 원시적인 형태의 ThreadPool 완성">
       <option name="closed" value="true" />
@@ -182,7 +180,15 @@
       <option name="project" value="LOCAL" />
       <updated>1703301295588</updated>
     </task>
-    <option name="localTasksCounter" value="4" />
+    <task id="LOCAL-00004" summary="feat(12/23) : ThreadPool 정지 기능 개발 완료">
+      <option name="closed" value="true" />
+      <created>1703305626854</created>
+      <option name="number" value="00004" />
+      <option name="presentableId" value="LOCAL-00004" />
+      <option name="project" value="LOCAL" />
+      <updated>1703305626854</updated>
+    </task>
+    <option name="localTasksCounter" value="5" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -192,6 +198,7 @@
     <MESSAGE value="feature: 가장 원시적인 형태의 ThreadPool 완성" />
     <MESSAGE value="test: 가장 원시적인 형태의 Thread Pool 테스트" />
     <MESSAGE value="feat(12/23) : ThreadPool 개선 &#10;- Interrupt 대신 SHUTDOWN_TASK를 통해 ThreadPool 종료 signaling&#10;- shutdown 여러 번 호출 방지를 위한 AtomicBoolean 적용&#10;- SHUTDOWN_TASK 적용 이후, 불필요한 queue.isEmpty()와 shutdown 여부 확인 리팩토링" />
-    <option name="LAST_COMMIT_MESSAGE" value="feat(12/23) : ThreadPool 개선 &#10;- Interrupt 대신 SHUTDOWN_TASK를 통해 ThreadPool 종료 signaling&#10;- shutdown 여러 번 호출 방지를 위한 AtomicBoolean 적용&#10;- SHUTDOWN_TASK 적용 이후, 불필요한 queue.isEmpty()와 shutdown 여부 확인 리팩토링" />
+    <MESSAGE value="feat(12/23) : ThreadPool 정지 기능 개발 완료" />
+    <option name="LAST_COMMIT_MESSAGE" value="feat(12/23) : ThreadPool 정지 기능 개발 완료" />
   </component>
 </project>
